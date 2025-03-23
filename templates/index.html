@@ -1,138 +1,110 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <!-- Sidebar with forms -->
-    <div class="col-md-3">
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                Add Value
-            </div>
-            <div class="card-body">
-                <form id="value-form">
-                    <div class="mb-3">
-                        <label for="value-name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="value-name" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Add Value</button>
-                </form>
-            </div>
-        </div>
-        
-        <div class="card mb-4">
-            <div class="card-header bg-success text-white">
-                Add Goal
-            </div>
-            <div class="card-body">
-                <form id="goal-form">
-                    <div class="mb-3">
-                        <label for="goal-name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="goal-name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="goal-description" class="form-label">Description</label>
-                        <textarea class="form-control" id="goal-description" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="goal-values" class="form-label">Related Values</label>
-                        <select multiple class="form-select" id="goal-values">
-                            <!-- Values will be populated from JavaScript -->
-                        </select>
-                        <div class="form-text">Hold Ctrl/Cmd to select multiple values</div>
-                    </div>
-                    <button type="submit" class="btn btn-success">Add Goal</button>
-                </form>
-            </div>
-        </div>
-        
-        <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                Add Metric
-            </div>
-            <div class="card-body">
-                <form id="metric-form">
-                    <div class="mb-3">
-                        <label for="metric-name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="metric-name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="metric-goals" class="form-label">Related Goals</label>
-                        <select multiple class="form-select" id="metric-goals">
-                            <!-- Goals will be populated from JavaScript -->
-                        </select>
-                        <div class="form-text">Hold Ctrl/Cmd to select multiple goals</div>
-                    </div>
-                    <button type="submit" class="btn btn-info">Add Metric</button>
-                </form>
+<div class="container mt-4">
+    <div class="row">
+        <!-- Forms Column -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Add New Item</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Value Form -->
+                    <form id="valueForm" class="mb-4">
+                        <h6>Add Value</h6>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="valueName" placeholder="Value Name" required>
+                        </div>
+                        <div class="mb-3">
+                            <textarea class="form-control" id="valueDescription" placeholder="Value Description" rows="2"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Value</button>
+                    </form>
+
+                    <!-- Goal Form -->
+                    <form id="goalForm" class="mb-4">
+                        <h6>Add Goal</h6>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="goalName" placeholder="Goal Name" required>
+                        </div>
+                        <div class="mb-3">
+                            <textarea class="form-control" id="goalDescription" placeholder="Goal Description" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Associated Values:</label>
+                            <div id="valueCheckboxes" class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                                <!-- Value checkboxes will be populated here -->
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Goal</button>
+                    </form>
+
+                    <!-- Metric Form -->
+                    <form id="metricForm">
+                        <h6>Add Metric</h6>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="metricName" placeholder="Metric Name" required>
+                        </div>
+                        <div class="mb-3">
+                            <textarea class="form-control" id="metricDescription" placeholder="Metric Description" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Associated Goals:</label>
+                            <div id="goalCheckboxes" class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                                <!-- Goal checkboxes will be populated here -->
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Metric</button>
+                    </form>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Main content area with visualization -->
-    <div class="col-md-9">
-        <div class="card">
-            <div class="card-header">
-                Hierarchy Visualization
-            </div>
-            <div class="card-body">
-                <div id="visualization"></div>
+
+        <!-- Visualization Column -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Hierarchy Visualization</h5>
+                    <button id="resetBtn" class="btn btn-danger btn-sm">Reset All Data</button>
+                </div>
+                <div class="card-body">
+                    <div id="visualization" class="hierarchy-container"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Edit Modal -->
-<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+<div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editModalLabel">Edit Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">Edit Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="edit-form">
-                    <input type="hidden" id="edit-id">
-                    <input type="hidden" id="edit-type">
-                    
+                <form id="editForm">
+                    <input type="hidden" id="editId">
+                    <input type="hidden" id="editType">
                     <div class="mb-3">
-                        <label for="edit-name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="edit-name" readonly>
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" id="editName" required>
                     </div>
-                    
-                    <div id="edit-value-section" class="mb-3" style="display: none;">
-                        <label for="edit-value-goals" class="form-label">Connected Goals</label>
-                        <select multiple class="form-select" id="edit-value-goals">
-                            <!-- Goals will be populated from JavaScript -->
-                        </select>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="editDescription" rows="3"></textarea>
                     </div>
-                    
-                    <div id="edit-goal-section" style="display: none;">
-                        <div class="mb-3">
-                            <label for="edit-goal-values" class="form-label">Connected Values</label>
-                            <select multiple class="form-select" id="edit-goal-values">
-                                <!-- Values will be populated from JavaScript -->
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit-goal-metrics" class="form-label">Connected Metrics</label>
-                            <select multiple class="form-select" id="edit-goal-metrics">
-                                <!-- Metrics will be populated from JavaScript -->
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div id="edit-metric-section" class="mb-3" style="display: none;">
-                        <label for="edit-metric-goals" class="form-label">Connected Goals</label>
-                        <select multiple class="form-select" id="edit-metric-goals">
-                            <!-- Goals will be populated from JavaScript -->
-                        </select>
+                    <div id="editConnections" class="mb-3">
+                        <!-- Connection options will be populated here -->
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger" id="delete-button">Delete</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="save-button">Save changes</button>
+                <button type="button" class="btn btn-primary" id="saveEdit">Save Changes</button>
+                <button type="button" class="btn btn-danger" id="deleteItem">Delete</button>
             </div>
         </div>
     </div>
@@ -140,6 +112,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/hierarchy.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/hierarchy.js') }}"></script>
 {% endblock %} 

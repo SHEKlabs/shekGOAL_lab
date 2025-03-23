@@ -1,24 +1,33 @@
 // D3.js Hierarchy Visualization
 function updateVisualization(hierarchyData) {
-    console.log("Updating visualization with data:", hierarchyData);
+    console.log("Updating visualization with:", hierarchyData);
     
-    // Get the container dimensions
-    const container = document.getElementById('visualization');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    // Clear previous visualization
+    const visualizationDiv = document.getElementById('visualization');
+    visualizationDiv.innerHTML = '';
     
-    // Clear previous SVG
-    d3.select('#visualization svg').remove();
+    // Exit early if no data
+    if (!hierarchyData || (!hierarchyData.values.length && !hierarchyData.goals.length && !hierarchyData.metrics.length)) {
+        console.log("No data to visualize");
+        visualizationDiv.innerHTML = '<div class="alert alert-info m-3">No data yet. Add values, goals, and metrics to visualize them.</div>';
+        return;
+    }
     
-    // Create SVG element
+    // Get container dimensions
+    const container = visualizationDiv.getBoundingClientRect();
+    const width = container.width || 800;
+    const height = 600;
+    
+    // Create SVG
     const svg = d3.select('#visualization')
         .append('svg')
         .attr('width', width)
-        .attr('height', height);
+        .attr('height', height)
+        .attr('class', 'hierarchy-svg');
     
     // Constants for spacing and dimensions
     const rowHeight = height / 4;
-    const boxHeight = 40;
+    const boxHeight = 80;
     const boxWidth = 180;
     const boxMargin = 20;
     
@@ -27,149 +36,161 @@ function updateVisualization(hierarchyData) {
     const goalY = rowHeight * 2;
     const metricY = rowHeight * 3;
     
-    // Add row labels
-    svg.append('text')
-        .attr('class', 'row-label')
-        .attr('x', 20)
-        .attr('y', valueY - boxHeight)
-        .text('Values');
-    
-    svg.append('text')
-        .attr('class', 'row-label')
-        .attr('x', 20)
-        .attr('y', goalY - boxHeight)
-        .text('Goals');
-    
-    svg.append('text')
-        .attr('class', 'row-label')
-        .attr('x', 20)
-        .attr('y', metricY - boxHeight)
-        .text('Metrics');
-    
-    // Calculate positions for the boxes
+    // Create box positions
     const values = hierarchyData.values || [];
     const goals = hierarchyData.goals || [];
     const metrics = hierarchyData.metrics || [];
     
-    console.log("Visualization data:", { values, goals, metrics });
+    console.log("Values:", values.length, "Goals:", goals.length, "Metrics:", metrics.length);
     
-    // Position values
+    // Create boxes with positions
     const valueBoxes = values.map((value, i) => {
-        const x = 50 + i * (boxWidth + boxMargin);
+        const totalWidth = Math.max(values.length * (boxWidth + boxMargin) - boxMargin, 10);
+        const startX = (width - totalWidth) / 2;
         return {
             ...value,
-            x: x,
-            y: valueY - boxHeight / 2,
+            x: startX + i * (boxWidth + boxMargin),
+            y: valueY,
             width: boxWidth,
             height: boxHeight
         };
     });
     
-    // Position goals
     const goalBoxes = goals.map((goal, i) => {
-        const x = 50 + i * (boxWidth + boxMargin);
+        const totalWidth = Math.max(goals.length * (boxWidth + boxMargin) - boxMargin, 10);
+        const startX = (width - totalWidth) / 2;
         return {
             ...goal,
-            x: x,
-            y: goalY - boxHeight / 2,
+            x: startX + i * (boxWidth + boxMargin),
+            y: goalY,
             width: boxWidth,
             height: boxHeight
         };
     });
     
-    console.log("Goal boxes:", goalBoxes);
-    
-    // Position metrics
     const metricBoxes = metrics.map((metric, i) => {
-        const x = 50 + i * (boxWidth + boxMargin);
+        const totalWidth = Math.max(metrics.length * (boxWidth + boxMargin) - boxMargin, 10);
+        const startX = (width - totalWidth) / 2;
         return {
             ...metric,
-            x: x,
-            y: metricY - boxHeight / 2,
+            x: startX + i * (boxWidth + boxMargin),
+            y: metricY,
             width: boxWidth,
             height: boxHeight
         };
     });
     
-    // Create links between values and goals
-    const valueGoalLinks = [];
-    values.forEach(value => {
-        if (value.goal_ids && value.goal_ids.length > 0) {
-            const valueBox = valueBoxes.find(v => v.id === value.id);
-            
+    // Create connections between elements
+    const connections = [];
+    
+    // Value-Goal connections
+    valueBoxes.forEach(value => {
+        console.log("Processing value:", value.name, "with goals:", value.goals);
+        if (value.goals && Array.isArray(value.goals)) {
+            value.goals.forEach(goalRef => {
+                const goal = goalBoxes.find(g => g.id === goalRef.id);
+                if (goal) {
+                    connections.push({
+                        source: value,
+                        target: goal
+                    });
+                    console.log(`Created connection: Value ${value.name} -> Goal ${goal.name}`);
+                }
+            });
+        } else if (value.goal_ids && Array.isArray(value.goal_ids)) {
             value.goal_ids.forEach(goalId => {
-                const goalBox = goalBoxes.find(g => g.id === goalId);
-                if (valueBox && goalBox) {
-                    valueGoalLinks.push({
-                        source: valueBox,
-                        target: goalBox
+                const goal = goalBoxes.find(g => g.id === goalId);
+                if (goal) {
+                    connections.push({
+                        source: value,
+                        target: goal
                     });
+                    console.log(`Created connection: Value ${value.name} -> Goal ${goal.name} (using goal_ids)`);
                 }
             });
         }
     });
     
-    // Create links between goals and metrics
-    const goalMetricLinks = [];
-    goals.forEach(goal => {
-        if (goal.metric_ids && goal.metric_ids.length > 0) {
-            const goalBox = goalBoxes.find(g => g.id === goal.id);
-            
+    // Goal-Metric connections
+    goalBoxes.forEach(goal => {
+        console.log("Processing goal:", goal.name, "with metrics:", goal.metrics);
+        if (goal.metrics && Array.isArray(goal.metrics)) {
+            goal.metrics.forEach(metricRef => {
+                const metric = metricBoxes.find(m => m.id === metricRef.id);
+                if (metric) {
+                    connections.push({
+                        source: goal,
+                        target: metric
+                    });
+                    console.log(`Created connection: Goal ${goal.name} -> Metric ${metric.name}`);
+                }
+            });
+        } else if (goal.metric_ids && Array.isArray(goal.metric_ids)) {
             goal.metric_ids.forEach(metricId => {
-                const metricBox = metricBoxes.find(m => m.id === metricId);
-                if (goalBox && metricBox) {
-                    goalMetricLinks.push({
-                        source: goalBox,
-                        target: metricBox
+                const metric = metricBoxes.find(m => m.id === metricId);
+                if (metric) {
+                    connections.push({
+                        source: goal,
+                        target: metric
                     });
+                    console.log(`Created connection: Goal ${goal.name} -> Metric ${metric.name} (using metric_ids)`);
                 }
             });
         }
     });
     
-    // Define curved line generator
-    const lineGenerator = d3.line()
-        .x(d => d.x)
-        .y(d => d.y)
-        .curve(d3.curveBasis);
-    
-    // Draw links between values and goals
-    valueGoalLinks.forEach(link => {
-        const sourceX = link.source.x + boxWidth / 2;
-        const sourceY = link.source.y + boxHeight;
-        const targetX = link.target.x + boxWidth / 2;
-        const targetY = link.target.y;
+    // Draw connections
+    connections.forEach(connection => {
+        const sourceX = connection.source.x + connection.source.width / 2;
+        const sourceY = connection.source.y + connection.source.height;
+        const targetX = connection.target.x + connection.target.width / 2;
+        const targetY = connection.target.y;
         
+        // Create a curve path
         const points = [
-            { x: sourceX, y: sourceY },
-            { x: sourceX, y: sourceY + (targetY - sourceY) / 2 },
-            { x: targetX, y: sourceY + (targetY - sourceY) / 2 },
-            { x: targetX, y: targetY }
+            [sourceX, sourceY],
+            [sourceX, sourceY + (targetY - sourceY) / 3],
+            [targetX, sourceY + 2 * (targetY - sourceY) / 3],
+            [targetX, targetY]
         ];
+        
+        const lineGenerator = d3.line()
+            .x(d => d[0])
+            .y(d => d[1])
+            .curve(d3.curveBasis);
         
         svg.append('path')
             .attr('class', 'link')
-            .attr('d', lineGenerator(points));
+            .attr('d', lineGenerator(points))
+            .style("fill", "none")
+            .style("stroke", "#999")
+            .style("stroke-width", "3")
+            .style("opacity", 0.6);
     });
     
-    // Draw links between goals and metrics
-    goalMetricLinks.forEach(link => {
-        const sourceX = link.source.x + boxWidth / 2;
-        const sourceY = link.source.y + boxHeight;
-        const targetX = link.target.x + boxWidth / 2;
-        const targetY = link.target.y;
+    console.log("Creating boxes:", {valueBoxes, goalBoxes, metricBoxes});
+    
+    // Add row labels
+    svg.append('text')
+        .attr('x', 20)
+        .attr('y', valueY - 20)
+        .style('fill', '#333')
+        .style('font-weight', 'bold')
+        .text('Values');
         
-        const points = [
-            { x: sourceX, y: sourceY },
-            { x: sourceX, y: sourceY + (targetY - sourceY) / 2 },
-            { x: targetX, y: sourceY + (targetY - sourceY) / 2 },
-            { x: targetX, y: targetY }
-        ];
+    svg.append('text')
+        .attr('x', 20)
+        .attr('y', goalY - 20)
+        .style('fill', '#333')
+        .style('font-weight', 'bold')
+        .text('Goals');
         
-        svg.append('path')
-            .attr('class', 'link')
-            .attr('d', lineGenerator(points));
-    });
+    svg.append('text')
+        .attr('x', 20)
+        .attr('y', metricY - 20)
+        .style('fill', '#333')
+        .style('font-weight', 'bold')
+        .text('Metrics');
     
     // Create value nodes
     const valueNodes = svg.selectAll('.value-node')
@@ -184,12 +205,28 @@ function updateVisualization(hierarchyData) {
     
     valueNodes.append('rect')
         .attr('width', d => d.width)
-        .attr('height', d => d.height);
+        .attr('height', d => d.height)
+        .attr('rx', 5)
+        .attr('ry', 5)
+        .style('fill', '#4CAF50')
+        .style('stroke', '#fff')
+        .style('stroke-width', 2);
     
     valueNodes.append('text')
         .attr('x', d => d.width / 2)
-        .attr('y', d => d.height / 2)
+        .attr('y', d => d.height / 3)
+        .style('fill', '#fff')
+        .style('font-weight', 'bold')
+        .style('text-anchor', 'middle')
         .text(d => d.name);
+    
+    valueNodes.append('text')
+        .attr('x', d => d.width / 2)
+        .attr('y', d => d.height * 2 / 3)
+        .style('fill', '#fff')
+        .style('font-size', '12px')
+        .style('text-anchor', 'middle')
+        .text(d => d.description || "No description");
     
     // Create goal nodes
     const goalNodes = svg.selectAll('.goal-node')
@@ -204,12 +241,28 @@ function updateVisualization(hierarchyData) {
     
     goalNodes.append('rect')
         .attr('width', d => d.width)
-        .attr('height', d => d.height);
+        .attr('height', d => d.height)
+        .attr('rx', 5)
+        .attr('ry', 5)
+        .style('fill', '#2196F3')
+        .style('stroke', '#fff')
+        .style('stroke-width', 2);
     
     goalNodes.append('text')
         .attr('x', d => d.width / 2)
-        .attr('y', d => d.height / 2)
+        .attr('y', d => d.height / 3)
+        .style('fill', '#fff')
+        .style('font-weight', 'bold')
+        .style('text-anchor', 'middle')
         .text(d => d.name);
+    
+    goalNodes.append('text')
+        .attr('x', d => d.width / 2)
+        .attr('y', d => d.height * 2 / 3)
+        .style('fill', '#fff')
+        .style('font-size', '12px')
+        .style('text-anchor', 'middle')
+        .text(d => d.description || "No description");
     
     // Create metric nodes
     const metricNodes = svg.selectAll('.metric-node')
@@ -224,21 +277,26 @@ function updateVisualization(hierarchyData) {
     
     metricNodes.append('rect')
         .attr('width', d => d.width)
-        .attr('height', d => d.height);
+        .attr('height', d => d.height)
+        .attr('rx', 5)
+        .attr('ry', 5)
+        .style('fill', '#FFC107')
+        .style('stroke', '#fff')
+        .style('stroke-width', 2);
     
     metricNodes.append('text')
         .attr('x', d => d.width / 2)
-        .attr('y', d => d.height / 2)
+        .attr('y', d => d.height / 3)
+        .style('fill', '#fff')
+        .style('font-weight', 'bold')
+        .style('text-anchor', 'middle')
         .text(d => d.name);
     
-    // Adjust SVG size if needed for scrolling
-    const maxX = Math.max(
-        values.length * (boxWidth + boxMargin),
-        goals.length * (boxWidth + boxMargin),
-        metrics.length * (boxWidth + boxMargin)
-    );
-    
-    if (maxX > width) {
-        svg.attr('width', maxX + 100);
-    }
+    metricNodes.append('text')
+        .attr('x', d => d.width / 2)
+        .attr('y', d => d.height * 2 / 3)
+        .style('fill', '#fff')
+        .style('font-size', '12px')
+        .style('text-anchor', 'middle')
+        .text(d => d.description || "No description");
 } 

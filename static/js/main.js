@@ -1,4 +1,58 @@
+// Global function to fetch hierarchy data and update the visualization
+async function fetchHierarchyData() {
+    console.log("Fetching hierarchy data");
+    try {
+        const response = await fetch('/api/hierarchy');
+        const data = await response.json();
+        console.log("Hierarchy data fetched:", data);
+        
+        // Store globally for reference in edit forms
+        window.hierarchyData = data;
+        
+        // Update value checkboxes for goal form
+        updateCheckboxes(data);
+        
+        // Update visualization with new data
+        updateVisualization(data);
+    } catch (error) {
+        console.error('Error fetching hierarchy data:', error);
+    }
+}
+
+// Helper function to update checkboxes
+function updateCheckboxes(data) {
+    // Update value checkboxes for goal form
+    const valueCheckboxes = document.getElementById('valueCheckboxes');
+    if (valueCheckboxes) {
+        valueCheckboxes.innerHTML = '';
+        data.values.forEach(value => {
+            valueCheckboxes.innerHTML += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${value.id}" id="value-${value.id}">
+                    <label class="form-check-label" for="value-${value.id}">${value.name}</label>
+                </div>
+            `;
+        });
+    }
+    
+    // Update goal checkboxes for metric form
+    const goalCheckboxes = document.getElementById('goalCheckboxes');
+    if (goalCheckboxes) {
+        goalCheckboxes.innerHTML = '';
+        data.goals.forEach(goal => {
+            goalCheckboxes.innerHTML += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${goal.id}" id="goal-${goal.id}">
+                    <label class="form-check-label" for="goal-${goal.id}">${goal.name}</label>
+                </div>
+            `;
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("DOM loaded - initializing application");
+    
     // Global data store
     let hierarchyData = {
         values: [],
@@ -15,30 +69,134 @@ document.addEventListener('DOMContentLoaded', function() {
     const editModal = new bootstrap.Modal(document.getElementById('editModal'));
     const resetButton = document.getElementById('resetButton');
     
-    // Form event listeners
-    valueForm.addEventListener('submit', handleValueSubmit);
-    goalForm.addEventListener('submit', handleGoalSubmit);
-    metricForm.addEventListener('submit', handleMetricSubmit);
-    document.getElementById('save-button').addEventListener('click', handleSaveEdit);
-    document.getElementById('delete-button').addEventListener('click', handleDeleteItem);
-    resetButton.addEventListener('click', handleResetData);
+    // Initialize form handlers
+    initForms();
     
-    // Initial data load
+    // Fetch initial data
     fetchHierarchyData();
     
-    // Fetch hierarchy data from API
-    function fetchHierarchyData() {
-        fetch('/api/hierarchy')
-            .then(response => response.json())
-            .then(data => {
-                hierarchyData = data;
-                console.log("Fetched hierarchy data:", hierarchyData);
-                console.log("Goals data:", hierarchyData.goals);
-                updateSelectOptions();
-                updateVisualization(hierarchyData);
-            })
-            .catch(error => console.error('Error fetching hierarchy data:', error));
-    }
+    // Form event listeners
+    valueForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('valueName').value;
+        const description = document.getElementById('valueDescription').value;
+        
+        try {
+            const response = await fetch('/api/value', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description }),
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Value created successfully:", data);
+                document.getElementById('valueName').value = '';
+                document.getElementById('valueDescription').value = '';
+                await fetchHierarchyData();
+            } else {
+                console.error("Error creating value:", await response.text());
+            }
+        } catch (error) {
+            console.error('Error adding value:', error);
+        }
+    });
+    goalForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('goalName').value;
+        const description = document.getElementById('goalDescription').value;
+        const valueIds = Array.from(document.querySelectorAll('#valueCheckboxes input:checked'))
+            .map(checkbox => parseInt(checkbox.value));
+        
+        console.log("Selected value IDs:", valueIds);
+        
+        try {
+            const response = await fetch('/api/goal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description, value_ids: valueIds }),
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Goal created successfully:", data);
+                document.getElementById('goalName').value = '';
+                document.getElementById('goalDescription').value = '';
+                document.querySelectorAll('#valueCheckboxes input:checked').forEach(checkbox => checkbox.checked = false);
+                await fetchHierarchyData();
+            } else {
+                console.error("Error creating goal:", await response.text());
+            }
+        } catch (error) {
+            console.error('Error adding goal:', error);
+        }
+    });
+    metricForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('metricName').value;
+        const description = document.getElementById('metricDescription').value;
+        const goalIds = Array.from(document.querySelectorAll('#goalCheckboxes input:checked'))
+            .map(checkbox => parseInt(checkbox.value));
+        
+        console.log("Selected goal IDs:", goalIds);
+        
+        try {
+            const response = await fetch('/api/metric', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description, goal_ids: goalIds }),
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Metric created successfully:", data);
+                document.getElementById('metricName').value = '';
+                document.getElementById('metricDescription').value = '';
+                document.querySelectorAll('#goalCheckboxes input:checked').forEach(checkbox => checkbox.checked = false);
+                await fetchHierarchyData();
+            } else {
+                console.error("Error creating metric:", await response.text());
+            }
+        } catch (error) {
+            console.error('Error adding metric:', error);
+        }
+    });
+    document.getElementById('saveEdit').addEventListener('click', async () => {
+        const id = document.getElementById('editId').value;
+        const type = document.getElementById('editType').value;
+        const name = document.getElementById('editName').value;
+        const description = document.getElementById('editDescription').value;
+        
+        // Get selected connections
+        const connections = Array.from(document.querySelectorAll('#editConnections input:checked'))
+            .map(checkbox => parseInt(checkbox.value));
+        
+        try {
+            const response = await fetch(`/api/${type}/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description, connections }),
+            });
+            
+            if (response.ok) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+                modal.hide();
+                fetchHierarchyData();
+            }
+        } catch (error) {
+            console.error('Error updating item:', error);
+        }
+    });
+    document.getElementById('delete-button').addEventListener('click', handleDeleteItem);
+    resetButton.addEventListener('click', handleResetData);
     
     // Update select options in forms
     function updateSelectOptions() {
@@ -63,220 +221,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle value form submission
-    function handleValueSubmit(event) {
-        event.preventDefault();
-        const valueName = document.getElementById('value-name').value;
-        
-        fetch('/api/value', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: valueName
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("Value created:", data);
-            valueForm.reset();
-            fetchHierarchyData();
-        })
-        .catch(error => console.error('Error creating value:', error));
-    }
-    
-    // Handle goal form submission
-    function handleGoalSubmit(event) {
-        event.preventDefault();
-        const goalName = document.getElementById('goal-name').value;
-        const goalDescription = document.getElementById('goal-description').value;
-        
-        // Get selected values
-        const selectedValueIds = Array.from(goalValuesSelect.selectedOptions).map(option => parseInt(option.value));
-        
-        fetch('/api/goal', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: goalName,
-                description: goalDescription,
-                value_ids: selectedValueIds
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("Goal created:", data);
-            goalForm.reset();
-            fetchHierarchyData();
-        })
-        .catch(error => console.error('Error creating goal:', error));
-    }
-    
-    // Handle metric form submission
-    function handleMetricSubmit(event) {
-        event.preventDefault();
-        const metricName = document.getElementById('metric-name').value;
-        
-        // Get selected goals
-        const selectedGoalIds = Array.from(metricGoalsSelect.selectedOptions).map(option => parseInt(option.value));
-        
-        fetch('/api/metric', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: metricName,
-                goal_ids: selectedGoalIds
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("Metric created:", data);
-            metricForm.reset();
-            fetchHierarchyData();
-        })
-        .catch(error => console.error('Error creating metric:', error));
-    }
-    
     // Open edit modal for an item
     window.openEditModal = function(type, id) {
-        const editId = document.getElementById('edit-id');
-        const editType = document.getElementById('edit-type');
-        const editName = document.getElementById('edit-name');
+        console.log(`Opening edit modal for ${type} with ID ${id}`);
         
-        const editValueSection = document.getElementById('edit-value-section');
-        const editGoalSection = document.getElementById('edit-goal-section');
-        const editMetricSection = document.getElementById('edit-metric-section');
-        
-        // Reset all sections
-        editValueSection.style.display = 'none';
-        editGoalSection.style.display = 'none';
-        editMetricSection.style.display = 'none';
-        
-        // Find the item in the hierarchy data
-        let item;
-        if (type === 'value') {
-            item = hierarchyData.values.find(v => v.id === id);
-            editValueSection.style.display = 'block';
-            
-            // Populate goal options for value
-            const editValueGoals = document.getElementById('edit-value-goals');
-            editValueGoals.innerHTML = '';
-            
-            hierarchyData.goals.forEach(goal => {
-                const option = document.createElement('option');
-                option.value = goal.id;
-                option.textContent = goal.name;
-                option.selected = item.goal_ids.includes(goal.id);
-                editValueGoals.appendChild(option);
-            });
-        } else if (type === 'goal') {
-            item = hierarchyData.goals.find(g => g.id === id);
-            editGoalSection.style.display = 'block';
-            
-            // Populate value options for goal
-            const editGoalValues = document.getElementById('edit-goal-values');
-            editGoalValues.innerHTML = '';
-            
-            hierarchyData.values.forEach(value => {
-                const option = document.createElement('option');
-                option.value = value.id;
-                option.textContent = value.name;
-                option.selected = item.value_ids.includes(value.id);
-                editGoalValues.appendChild(option);
-            });
-            
-            // Populate metric options for goal
-            const editGoalMetrics = document.getElementById('edit-goal-metrics');
-            editGoalMetrics.innerHTML = '';
-            
-            hierarchyData.metrics.forEach(metric => {
-                const option = document.createElement('option');
-                option.value = metric.id;
-                option.textContent = metric.name;
-                option.selected = item.metric_ids.includes(metric.id);
-                editGoalMetrics.appendChild(option);
-            });
-        } else if (type === 'metric') {
-            item = hierarchyData.metrics.find(m => m.id === id);
-            editMetricSection.style.display = 'block';
-            
-            // Populate goal options for metric
-            const editMetricGoals = document.getElementById('edit-metric-goals');
-            editMetricGoals.innerHTML = '';
-            
-            hierarchyData.goals.forEach(goal => {
-                const option = document.createElement('option');
-                option.value = goal.id;
-                option.textContent = goal.name;
-                option.selected = item.goal_ids.includes(goal.id);
-                editMetricGoals.appendChild(option);
-            });
+        const item = findItemById(type, id);
+        if (!item) {
+            console.error(`Item not found: ${type} ${id}`);
+            return;
         }
         
-        if (item) {
-            editId.value = id;
-            editType.value = type;
-            editName.value = item.name;
-            editModal.show();
-        }
+        document.getElementById('editId').value = item.id;
+        document.getElementById('editType').value = type;
+        document.getElementById('editName').value = item.name;
+        document.getElementById('editDescription').value = item.description || '';
+        
+        // Show the appropriate connection options based on item type
+        updateEditConnections(item, type);
+        
+        const modal = new bootstrap.Modal(document.getElementById('editModal'));
+        modal.show();
     };
-    
-    // Handle save button in edit modal
-    function handleSaveEdit() {
-        const id = parseInt(document.getElementById('edit-id').value);
-        const type = document.getElementById('edit-type').value;
-        
-        let selectedIds = [];
-        
-        if (type === 'value') {
-            const goals = document.getElementById('edit-value-goals');
-            selectedIds = Array.from(goals.selectedOptions).map(option => parseInt(option.value));
-            
-            updateConnections(type, id, { goal_ids: selectedIds });
-        } else if (type === 'goal') {
-            const values = document.getElementById('edit-goal-values');
-            const metrics = document.getElementById('edit-goal-metrics');
-            
-            const valueIds = Array.from(values.selectedOptions).map(option => parseInt(option.value));
-            const metricIds = Array.from(metrics.selectedOptions).map(option => parseInt(option.value));
-            
-            updateConnections(type, id, { value_ids: valueIds, metric_ids: metricIds });
-        } else if (type === 'metric') {
-            const goals = document.getElementById('edit-metric-goals');
-            selectedIds = Array.from(goals.selectedOptions).map(option => parseInt(option.value));
-            
-            updateConnections(type, id, { goal_ids: selectedIds });
-        }
-    }
-    
-    // Update connections between items
-    function updateConnections(itemType, itemId, connections) {
-        const data = {
-            item_type: itemType,
-            item_id: itemId,
-            ...connections
-        };
-        
-        fetch('/api/connections', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("Connections updated:", data);
-            editModal.hide();
-            fetchHierarchyData();
-        })
-        .catch(error => console.error('Error updating connections:', error));
-    }
     
     // Handle delete button in edit modal
     function handleDeleteItem() {
@@ -316,4 +281,315 @@ document.addEventListener('DOMContentLoaded', function() {
     window.updateHierarchyVisualization = function() {
         updateVisualization(hierarchyData);
     };
-}); 
+});
+
+// Function to initialize forms with event handlers
+function initForms() {
+    console.log("Initializing form handlers");
+    
+    // Value form submission
+    const valueForm = document.getElementById('valueForm');
+    if (valueForm) {
+        valueForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log("Value form submitted");
+            
+            const name = document.getElementById('valueName').value;
+            const description = document.getElementById('valueDescription').value;
+            
+            try {
+                const response = await fetch('/api/value', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("Value created successfully:", data);
+                    document.getElementById('valueName').value = '';
+                    document.getElementById('valueDescription').value = '';
+                    
+                    // Immediately fetch updated data and refresh the visualization
+                    await fetchHierarchyData();
+                } else {
+                    console.error("Error creating value:", await response.text());
+                }
+            } catch (error) {
+                console.error('Error adding value:', error);
+            }
+        });
+    }
+    
+    // Goal form submission
+    const goalForm = document.getElementById('goalForm');
+    if (goalForm) {
+        goalForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log("Goal form submitted");
+            
+            const name = document.getElementById('goalName').value;
+            const description = document.getElementById('goalDescription').value;
+            const valueIds = Array.from(document.querySelectorAll('#valueCheckboxes input:checked'))
+                .map(checkbox => parseInt(checkbox.value));
+            
+            console.log("Selected value IDs:", valueIds);
+            
+            try {
+                const response = await fetch('/api/goal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description, value_ids: valueIds }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("Goal created successfully:", data);
+                    document.getElementById('goalName').value = '';
+                    document.getElementById('goalDescription').value = '';
+                    document.querySelectorAll('#valueCheckboxes input:checked').forEach(checkbox => checkbox.checked = false);
+                    
+                    // Immediately fetch updated data and refresh the visualization
+                    await fetchHierarchyData();
+                } else {
+                    console.error("Error creating goal:", await response.text());
+                }
+            } catch (error) {
+                console.error('Error adding goal:', error);
+            }
+        });
+    }
+    
+    // Metric form submission
+    const metricForm = document.getElementById('metricForm');
+    if (metricForm) {
+        metricForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log("Metric form submitted");
+            
+            const name = document.getElementById('metricName').value;
+            const description = document.getElementById('metricDescription').value;
+            const goalIds = Array.from(document.querySelectorAll('#goalCheckboxes input:checked'))
+                .map(checkbox => parseInt(checkbox.value));
+            
+            console.log("Selected goal IDs:", goalIds);
+            
+            try {
+                const response = await fetch('/api/metric', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description, goal_ids: goalIds }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("Metric created successfully:", data);
+                    document.getElementById('metricName').value = '';
+                    document.getElementById('metricDescription').value = '';
+                    document.querySelectorAll('#goalCheckboxes input:checked').forEach(checkbox => checkbox.checked = false);
+                    
+                    // Immediately fetch updated data and refresh the visualization
+                    await fetchHierarchyData();
+                } else {
+                    console.error("Error creating metric:", await response.text());
+                }
+            } catch (error) {
+                console.error('Error adding metric:', error);
+            }
+        });
+    }
+    
+    // Save changes button
+    const saveEditBtn = document.getElementById('saveEdit');
+    if (saveEditBtn) {
+        saveEditBtn.addEventListener('click', async function() {
+            const id = document.getElementById('editId').value;
+            const type = document.getElementById('editType').value;
+            const name = document.getElementById('editName').value;
+            const description = document.getElementById('editDescription').value;
+            
+            // Get selected connections
+            const connections = Array.from(document.querySelectorAll('#editConnections input:checked'))
+                .map(checkbox => parseInt(checkbox.value));
+            
+            try {
+                const response = await fetch(`/api/${type}/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, description, connections }),
+                });
+                
+                if (response.ok) {
+                    console.log(`${type} updated successfully`);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+                    modal.hide();
+                    await fetchHierarchyData();
+                } else {
+                    console.error(`Error updating ${type}:`, await response.text());
+                }
+            } catch (error) {
+                console.error(`Error updating ${type}:`, error);
+            }
+        });
+    }
+    
+    // Delete button
+    const deleteBtn = document.getElementById('deleteItem');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async function() {
+            if (!confirm('Are you sure you want to delete this item?')) {
+                return;
+            }
+            
+            const id = document.getElementById('editId').value;
+            const type = document.getElementById('editType').value;
+            
+            console.log(`Deleting ${type} ${id}`);
+            
+            try {
+                const response = await fetch(`/api/${type}/${id}`, {
+                    method: 'DELETE',
+                });
+                
+                if (response.ok) {
+                    console.log(`${type} deleted successfully`);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+                    modal.hide();
+                    await fetchHierarchyData();
+                } else {
+                    console.error(`Error deleting ${type}:`, await response.text());
+                }
+            } catch (error) {
+                console.error(`Error deleting ${type}:`, error);
+            }
+        });
+    }
+    
+    // Reset button
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async function() {
+            if (!confirm('Are you sure you want to reset all data? This cannot be undone!')) {
+                return;
+            }
+            
+            console.log("Resetting all data");
+            
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                });
+                
+                if (response.ok) {
+                    console.log("Data reset successfully");
+                    await fetchHierarchyData();
+                } else {
+                    console.error("Error resetting data:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error resetting data:", error);
+            }
+        });
+    }
+}
+
+// Update the connection options in the edit modal
+function updateEditConnections(item, itemType) {
+    const connectionsDiv = document.getElementById('editConnections');
+    connectionsDiv.innerHTML = '';
+    
+    if (itemType === 'value') {
+        // Show goal connections for values
+        if (window.hierarchyData?.goals?.length) {
+            connectionsDiv.innerHTML = `
+                <label class="form-label">Connected Goals:</label>
+                <div class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                    ${window.hierarchyData.goals.map(goal => `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="${goal.id}" id="edit-goal-${goal.id}" 
+                                ${item.goals && Array.isArray(item.goals) ? item.goals.some(g => g.id === goal.id) : item.goal_ids.includes(goal.id) ? 'checked' : ''}>
+                            <label class="form-check-label" for="edit-goal-${goal.id}">${goal.name}</label>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    } else if (itemType === 'goal') {
+        // Show value and metric connections for goals
+        let html = '';
+        
+        if (window.hierarchyData?.values?.length) {
+            html += `
+                <div class="mb-3">
+                    <label class="form-label">Connected Values:</label>
+                    <div class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                        ${window.hierarchyData.values.map(value => `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="${value.id}" id="edit-value-${value.id}" 
+                                    ${item.values && Array.isArray(item.values) ? item.values.some(v => v.id === value.id) : item.value_ids.includes(value.id) ? 'checked' : ''}>
+                                <label class="form-check-label" for="edit-value-${value.id}">${value.name}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (window.hierarchyData?.metrics?.length) {
+            html += `
+                <div class="mb-3">
+                    <label class="form-label">Connected Metrics:</label>
+                    <div class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                        ${window.hierarchyData.metrics.map(metric => `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="${metric.id}" id="edit-metric-${metric.id}" 
+                                    ${item.metrics && Array.isArray(item.metrics) ? item.metrics.some(m => m.id === metric.id) : item.metric_ids.includes(metric.id) ? 'checked' : ''}>
+                                <label class="form-check-label" for="edit-metric-${metric.id}">${metric.name}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        connectionsDiv.innerHTML = html;
+    } else if (itemType === 'metric') {
+        // Show goal connections for metrics
+        if (window.hierarchyData?.goals?.length) {
+            connectionsDiv.innerHTML = `
+                <label class="form-label">Connected Goals:</label>
+                <div class="border p-2 rounded" style="max-height: 150px; overflow-y: auto;">
+                    ${window.hierarchyData.goals.map(goal => `
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="${goal.id}" id="edit-goal-${goal.id}" 
+                                ${item.goals && Array.isArray(item.goals) ? item.goals.some(g => g.id === goal.id) : item.goal_ids.includes(goal.id) ? 'checked' : ''}>
+                            <label class="form-check-label" for="edit-goal-${goal.id}">${goal.name}</label>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    }
+}
+
+// Find an item by its ID and type
+function findItemById(type, id) {
+    if (!window.hierarchyData) return null;
+    
+    if (type === 'value') {
+        return window.hierarchyData.values.find(v => v.id === id);
+    } else if (type === 'goal') {
+        return window.hierarchyData.goals.find(g => g.id === id);
+    } else if (type === 'metric') {
+        return window.hierarchyData.metrics.find(m => m.id === id);
+    }
+    return null;
+} 
